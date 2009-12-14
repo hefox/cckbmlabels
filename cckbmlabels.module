@@ -1,0 +1,103 @@
+<?php
+
+/**
+ * Implementation of hook_nodeapi
+ *
+ */
+function cckbmlabels_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  switch ($op) {
+    case 'view':
+      // NODE_BUILD_NORMAL is 0, and ('whatever' == 0) is TRUE, so we need a ===.
+      if ($node->build_mode === NODE_BUILD_NORMAL || $node->build_mode == NODE_BUILD_PREVIEW) {
+        $context = $teaser ? 'teaser' : 'full';
+      }
+      else {
+        $context = $node->build_mode;
+      }
+      $type = content_types($node->type);
+      if (!is_array($type['fields'])) return;
+      $return = array();
+      // The operations involving database queries are better off handled by table
+      // rather than by field.
+      foreach ($type['fields'] as $field) { 
+        if ($field['display_settings'][$context]['label']
+          && 'inherent' !=  $field['display_settings'][$context]['label']
+          && $context != NODE_BUILD_SEARCH_INDEX )   
+          $node->{$field['field_name']}['#label_display'] = $field['display_settings'][$context]['label'] ;
+      }
+      break;
+  }
+}
+
+function cckbmlabels_fieldgroup_view(&$node, &$element, $group, $context) {
+  if ($group['settings']['display'][$context]['label'] 
+        && $group['settings']['display'][$context]['label']  != 'inherent'){
+    $label = $group['settings']['display'][$context]['label'] == 'above';
+    $element['#title'] = $label ? check_plain(t($group['label'])) : '';
+    $element['#description'] = $label ? content_filter_xss(t($group['settings']['display']['description'])) : '';
+
+  }
+}
+
+/**
+ * Implementation of hook_form_FORM_ID_alter
+ *
+ */
+ 
+function cckbmlabels_form_content_display_overview_form_alter(&$form, $form_state) {
+  $contexts = content_build_modes($form['#contexts']);
+  $type = content_types($form['#type_name']);
+  $field_types = _content_field_types();
+  $fields = $type['fields'];
+
+  $groups = array();
+  if (module_exists('fieldgroup')) {
+    $groups = fieldgroup_groups($type['type']);
+  }
+  
+  $label_options = array(
+    'inherent' => t('Inherent'),
+    'above' => t('Above'),
+    'inline' => t('Inline'),
+    'hidden' => t('<Hidden>'),
+  );
+  foreach ($fields as $name => $field) {
+    $field_type = $field_types[$field['type']];
+    $defaults = $field['display_settings'];
+    foreach($contexts as $key => $title) {
+      $form[$name][$key]['label'] = array(
+        '#type' => 'select',
+        '#options' => $label_options,
+        '#default_value' => isset($defaults[$key]['label']) ? $defaults[$key]['label'] : '',
+      );    
+    }
+  }
+  $label_options = array(
+    'inherent' => t('Inherent'),
+    'above' => t('Above'),
+    'hidden' => t('<Hidden>'),
+  );
+  foreach ($groups as $name => $group) {
+    $defaults = $group['settings']['display'];
+    $weight = $group['weight'];
+    foreach($contexts as $key => $title)  {
+      $form[$name][$key]['label'] = array(
+        '#type' => 'select',
+        '#options' => $label_options,
+        '#default_value' => isset($defaults[$key]['label']) ? $defaults[$key]['label'] : '',
+      );
+    }
+  }
+
+}
+
+
+function cckbmlabels_theme_registry_alter(&$theme_registry) {
+  $theme_registry['content_display_overview_form']['path'] =drupal_get_path('module', 'cckbmlabels');
+  $theme_registry['content_display_overview_form']['template'] = 'bml-content-admin-display-overview-form';
+  $pre = $theme_registry['content_display_overview_form']['preprocess functions'];
+  if (($key = array_search('template_preprocess_content_display_overview_form',$pre)) !== false)
+    unset($theme_registry['content_display_overview_form']['preprocess functions'][$key]);
+  if (!in_array('cckbmlabels_preprocess_content_display_overview_form',$pre))
+    $theme_registry['content_display_overview_form']['preprocess functions'][$key] = 'cckbmlabels_preprocess_content_display_overview_form';
+}

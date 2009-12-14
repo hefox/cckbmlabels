@@ -1,0 +1,4 @@
+name = CCK build mode labels
+description = Labels for group and fields per build mode
+core = 6.x
+dependencies[] = content
